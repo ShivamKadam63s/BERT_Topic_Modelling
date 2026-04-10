@@ -1,0 +1,236 @@
+[
+  {
+    "theme_name": "Digital Transformation and Innovation",
+    "topic_ids": [
+      7,
+      14,
+      19,
+      26,
+      28,
+      39,
+      43,
+      51
+    ],
+    "rationale": "This theme encompasses research on the adoption, impacts, and challenges of digital technologies and innovation across industries.",
+    "representative_sentences": [
+      "Originality/value: This study expands the existing literature of IT-related ambidexterity by examining digital transformation.",
+      "Purpose \u2013 This study examines how supply chain digitalization influences supply chain flexibility and performance.",
+      "The results provide valuable insights to organizations that are considering adopting Gen AI."
+    ],
+    "total_sentences": 995,
+    "constituent_labels": [
+      "Digital transformation and ambidexterity",
+      "Supply chain digitalization impacts",
+      "Big data analytics capabilities",
+      "Generative AI adoption insights",
+      "Generative AI trialability",
+      "IoT in sustainable supply chains",
+      "Digital innovation for sustainability",
+      "Circular economy implementation"
+    ]
+  },
+  {
+    "theme_name": "Supply Chain Management and Resilience",
+    "topic_ids": [
+      8,
+      10,
+      13,
+      24,
+      32,
+      38,
+      53,
+      58
+    ],
+    "rationale": "This theme focuses on supply chain strategies, technologies, and challenges, including digitalization, disruptions, and quality management.",
+    "representative_sentences": [
+      "The study carried out in this article motivates industries to implement BC in their SC system.",
+      "Findings: This paper presents a two-aspect DEA-based algorithm for clustering suppliers into clusters.",
+      "Purpose: The coronavirus disease 2019 (COVID-19) pandemic created heavy pressure on firms, by increasing supply chain disruptions."
+    ],
+    "total_sentences": 170,
+    "constituent_labels": [
+      "Blockchain in supply chains",
+      "Supplier clustering algorithms",
+      "IT capabilities in agri-food supply chains",
+      "Service quality cooperation stability",
+      "Supply chain information sharing",
+      "Food supply chain costing",
+      "Supply chain quality management",
+      "COVID-19 supply chain disruptions"
+    ]
+  },
+  {
+    "theme_name": "Technology Adoption and User Behavior",
+    "topic_ids": [
+      3,
+      9,
+      15,
+      16,
+      21,
+      23,
+      31,
+      34,
+      48,
+      54
+    ],
+    "rationale": "This theme explores the factors influencing technology adoption, user resistance, and behavioral responses to digital tools.",
+    "representative_sentences": [
+      "Findings: The results show that four barriers \u2013 usage, value, risk and image \u2013 cause resistance to change.",
+      "Practical implications: This research contributes to the understanding of e-commerce and consumer behavior.",
+      "Research limitations/implications: This research can unfold the RPA adoption scholarly debate to multiple service industries."
+    ],
+    "total_sentences": 313,
+    "constituent_labels": [
+      "Pre-trained models and uncertainties",
+      "User resistance to change",
+      "Technostress and turnover intention",
+      "Entrepreneurial skills perception",
+      "E-commerce consumer behavior",
+      "RPA adoption in service industries",
+      "Technology adoption challenges",
+      "Persuasive systems for energy saving",
+      "Fitness wearable adoption",
+      "Trust in food delivery apps"
+    ]
+  },
+  {
+    "theme_name": "Research Methodologies and Analytical Frameworks",
+    "topic_ids": [
+      0,
+      2,
+      4,
+      6,
+      20,
+      25,
+      30,
+      36,
+      46,
+      57
+    ],
+    "rationale": "This theme covers methodological approaches, analytical techniques, and frameworks used in academic research.",
+    "representative_sentences": [
+      "Design/methodology/approach: This study utilized a qualitative approach.",
+      "The results are also robust to various sensitivity analyses.",
+      "Design/methodology/approach: The authors employed the empirical survey method to gather the data using structural equation modeling."
+    ],
+    "total_sentences": 441,
+    "constituent_labels": [
+      "Managerial insights and frameworks",
+      "Research methodology approaches",
+      "Robustness of results",
+      "Multi-criteria decision-making methods",
+      "Organizational resilience paradoxes",
+      "Supplier ranking methods",
+      "Structural equation modeling applications",
+      "Boundary-spanning search innovation",
+      "SEM and ANN consistency",
+      "Neural network prediction accuracy"
+    ]
+  },
+  {
+    "theme_name": "Organizational Performance and Management",
+    "topic_ids": [
+      1,
+      5,
+      11,
+      12,
+      22,
+      33,
+      44,
+      50
+    ],
+    "rationale": "This theme addresses managerial insights, organizational challenges, and performance outcomes in various contexts.",
+    "representative_sentences": [
+      "Design/methodology/approach: Drawing on the technology\u2013organization\u2013environment (TOE) framework and firm performance.",
+      "The current study aims to comprehend the macro-, meso- and micro-level barriers that make it difficult for healthcare start-ups.",
+      "Research limitations/implications: This empirical study has significant implications for organizational cyber-security culture."
+    ],
+    "total_sentences": 273,
+    "constituent_labels": [
+      "Firm performance and FSS",
+      "Healthcare technology start-up barriers",
+      "Cyber-security and culture",
+      "Social media data analysis",
+      "Social influence and norms",
+      "Research limitations discussion",
+      "IT outsourcing conflict resolution",
+      "Internal marketing and knowledge management"
+    ]
+  },
+  {
+    "theme_name": "Healthcare Technology and Systems",
+    "topic_ids": [
+      5,
+      40,
+      48,
+      55,
+      56,
+      59
+    ],
+    "rationale": "This theme focuses on technology applications, challenges, and impacts in healthcare settings.",
+    "representative_sentences": [
+      "The current study aims to comprehend the macro-, meso- and micro-level barriers that make it difficult for healthcare technology start-ups.",
+      "The proposed framework will ensure the anonymity and security of the health data and improve the integration of health systems.",
+      "Findings: Study concluded that information quality of the adopted Health Information System (HIS) has significant impacts."
+    ],
+    "total_sentences": 82,
+    "constituent_labels": [
+      "Healthcare technology start-up barriers",
+      "Health data security frameworks",
+      "Fitness wearable adoption",
+      "Health information system impacts",
+      "Healthcare system data collection",
+      "Infrared face recognition models"
+    ]
+  },
+  {
+    "theme_name": "Emerging Technologies and Applications",
+    "topic_ids": [
+      3,
+      27,
+      29,
+      37,
+      41,
+      49,
+      52
+    ],
+    "rationale": "This theme highlights cutting-edge technologies, their applications, and implications across domains.",
+    "representative_sentences": [
+      "Some of the advantages of the pre-trained model over the calibration-based approach are robustness and efficiency.",
+      "Originality/value: The elaborated ADL can serve as a language to visualize software architectures, promoting better design practices.",
+      "Theoretically, it identifies and validates aesthetic constructs that explain NFT pricing beyond conventional factors."
+    ],
+    "total_sentences": 58,
+    "constituent_labels": [
+      "Pre-trained models and uncertainties",
+      "Device repair vs replacement",
+      "Multi-agent simulation models",
+      "Architecture description languages",
+      "NFT pricing and aesthetics",
+      "Identity management systems",
+      "Cultural data enrichment frameworks"
+    ]
+  },
+  {
+    "theme_name": "Sustainability and Circular Economy",
+    "topic_ids": [
+      18,
+      39,
+      43,
+      51
+    ],
+    "rationale": "This theme addresses sustainability challenges, circular economy practices, and digital innovations for environmental goals.",
+    "representative_sentences": [
+      "Findings: This paper reveals the importance of WTE and the significant role played by AD in converting waste to energy.",
+      "This paper investigates the most important challenges that individual firms and entire sustainable supply chains might face with IoT adoption.",
+      "Embracing digital innovation is crucial for all stakeholders to achieve sustainable development goals."
+    ],
+    "total_sentences": 65,
+    "constituent_labels": [
+      "Waste-to-energy conversion",
+      "IoT in sustainable supply chains",
+      "Digital innovation for sustainability",
+      "Circular economy implementation"
+    ]
+  }
+]

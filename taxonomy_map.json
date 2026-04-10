@@ -1,0 +1,58 @@
+[
+  {
+    "theme_name": "Digital Transformation and Innovation",
+    "pajais_match": "Business Intelligence",
+    "match_confidence": 0.8,
+    "reasoning": "The theme focuses on digital transformation, big data analytics, and AI adoption, which align closely with Business Intelligence's emphasis on data-driven decision-making and innovation.",
+    "is_novel": false
+  },
+  {
+    "theme_name": "Supply Chain Management and Resilience",
+    "pajais_match": "Decision Support Systems",
+    "match_confidence": 0.85,
+    "reasoning": "The theme involves blockchain, supplier clustering, and supply chain disruptions, which are key applications of Decision Support Systems for optimizing and managing supply chains.",
+    "is_novel": false
+  },
+  {
+    "theme_name": "Technology Adoption and User Behavior",
+    "pajais_match": "Human-Computer Interaction",
+    "match_confidence": 0.75,
+    "reasoning": "The theme addresses user resistance, technostress, and adoption challenges, which are central to Human-Computer Interaction research on user behavior and technology acceptance.",
+    "is_novel": false
+  },
+  {
+    "theme_name": "Research Methodologies and Analytical Frameworks",
+    "pajais_match": "NOVEL",
+    "match_confidence": 0.0,
+    "reasoning": "This theme focuses on methodological approaches and frameworks, which are not explicitly covered by any single PAJAIS category.",
+    "is_novel": true
+  },
+  {
+    "theme_name": "Organizational Performance and Management",
+    "pajais_match": "Business Intelligence",
+    "match_confidence": 0.7,
+    "reasoning": "The theme involves firm performance, IT outsourcing, and social media data analysis, which overlap with Business Intelligence's focus on organizational data and performance.",
+    "is_novel": false
+  },
+  {
+    "theme_name": "Healthcare Technology and Systems",
+    "pajais_match": "Healthcare & Biomedical AI",
+    "match_confidence": 0.95,
+    "reasoning": "The theme explicitly addresses healthcare technology, data security, and wearable adoption, making it a clear match for Healthcare & Biomedical AI.",
+    "is_novel": false
+  },
+  {
+    "theme_name": "Emerging Technologies and Applications",
+    "pajais_match": "Artificial Intelligence Methods",
+    "match_confidence": 0.8,
+    "reasoning": "The theme covers pre-trained models, multi-agent systems, and NFT pricing, which are emerging applications of Artificial Intelligence Methods.",
+    "is_novel": false
+  },
+  {
+    "theme_name": "Sustainability and Circular Economy",
+    "pajais_match": "NOVEL",
+    "match_confidence": 0.0,
+    "reasoning": "This theme focuses on sustainability and circular economy, which are not explicitly represented in the PAJAIS taxonomy.",
+    "is_novel": true
+  }
+]
