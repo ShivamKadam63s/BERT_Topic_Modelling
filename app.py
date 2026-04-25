@@ -30,6 +30,7 @@ import pandas as pd
 import traceback
 import datetime
 import time
+import plotly.io as pio
 from agent import agent
 
 # Check for API Key
@@ -57,6 +58,18 @@ EMPTY_REVIEW_DF = pd.DataFrame(
 DOWNLOAD_FILES = [
     "narrative.txt", "comparison.csv", "themes.json",
     "taxonomy_map.json", "labels_abstract.json", "labels_title.json",
+    # ── New DBSCAN + AI Council outputs ──
+    "dbscan_summaries_abstract.json", "dbscan_summaries_title.json",
+    "refined_clusters_abstract.json", "refined_clusters_title.json",
+    "council_labels_abstract.json",  "council_labels_title.json",
+    # PNG chart exports
+    "chart_abstract_intertopic.png",  "chart_abstract_bars.png",
+    "chart_abstract_hierarchy.png",   "chart_abstract_heatmap.png",
+    "chart_title_intertopic.png",     "chart_title_bars.png",
+    "chart_title_hierarchy.png",      "chart_title_heatmap.png",
+    "chart_abstract_dbscan_scatter.png", "chart_abstract_dbscan_comparison.png",
+    "chart_title_dbscan_scatter.png",    "chart_title_dbscan_comparison.png",
+    "chart_abstract_refined.png",     "chart_title_refined.png",
 ]
 
 # Files to wipe when the user resets the session
@@ -71,17 +84,39 @@ CHECKPOINT_FILES = [
     "chart_abstract_hierarchy.html", "chart_abstract_heatmap.html",
     "chart_title_intertopic.html", "chart_title_bars.html",
     "chart_title_hierarchy.html", "chart_title_heatmap.html",
+    # ── New DBSCAN + AI Council files ──
+    "dbscan_summaries_abstract.json", "dbscan_summaries_title.json",
+    "refined_clusters_abstract.json", "refined_clusters_title.json",
+    "council_labels_abstract.json",  "council_labels_title.json",
+    "chart_abstract_dbscan_scatter.html", "chart_abstract_dbscan_comparison.html",
+    "chart_title_dbscan_scatter.html",    "chart_title_dbscan_comparison.html",
+    "chart_abstract_refined.html",        "chart_title_refined.html",
+    # PNG exports (cleared on reset too)
+    "chart_abstract_intertopic.png",  "chart_abstract_bars.png",
+    "chart_abstract_hierarchy.png",   "chart_abstract_heatmap.png",
+    "chart_title_intertopic.png",     "chart_title_bars.png",
+    "chart_title_hierarchy.png",      "chart_title_heatmap.png",
+    "chart_abstract_dbscan_scatter.png", "chart_abstract_dbscan_comparison.png",
+    "chart_title_dbscan_scatter.png",    "chart_title_dbscan_comparison.png",
+    "chart_abstract_refined.png",     "chart_title_refined.png",
 ]
 
 CHART_OPTIONS = [
-    ("Intertopic Map — Abstract",      "chart_abstract_intertopic.html"),
-    ("Frequency Bars — Abstract",      "chart_abstract_bars.html"),
-    ("Hierarchy / Treemap — Abstract", "chart_abstract_hierarchy.html"),
-    ("Similarity Heatmap — Abstract",  "chart_abstract_heatmap.html"),
-    ("Intertopic Map — Title",         "chart_title_intertopic.html"),
-    ("Frequency Bars — Title",         "chart_title_bars.html"),
-    ("Hierarchy / Treemap — Title",    "chart_title_hierarchy.html"),
-    ("Similarity Heatmap — Title",     "chart_title_heatmap.html"),
+    ("Intertopic Map — Abstract",          "chart_abstract_intertopic.html"),
+    ("Frequency Bars — Abstract",          "chart_abstract_bars.html"),
+    ("Hierarchy / Treemap — Abstract",     "chart_abstract_hierarchy.html"),
+    ("Similarity Heatmap — Abstract",      "chart_abstract_heatmap.html"),
+    ("Intertopic Map — Title",             "chart_title_intertopic.html"),
+    ("Frequency Bars — Title",             "chart_title_bars.html"),
+    ("Hierarchy / Treemap — Title",        "chart_title_hierarchy.html"),
+    ("Similarity Heatmap — Title",         "chart_title_heatmap.html"),
+    # ── DBSCAN charts ──
+    ("DBSCAN Cluster Scatter — Abstract",  "chart_abstract_dbscan_scatter.html"),
+    ("DBSCAN vs Agglomerative — Abstract", "chart_abstract_dbscan_comparison.html"),
+    ("Refined Sub-Clusters — Abstract",    "chart_abstract_refined.html"),
+    ("DBSCAN Cluster Scatter — Title",     "chart_title_dbscan_scatter.html"),
+    ("DBSCAN vs Agglomerative — Title",    "chart_title_dbscan_comparison.html"),
+    ("Refined Sub-Clusters — Title",       "chart_title_refined.html"),
 ]
 
 PHASE_LABELS = [
@@ -111,6 +146,27 @@ body, .gradio-container {
     border-left: 3px solid #4a90d9; margin-bottom: 4px;
 }
 footer { display: none !important; }
+
+/* ── Resizeable review table ── */
+.resizeable-table-wrap {
+    overflow: auto;
+    resize: vertical;
+    min-height: 220px;
+    max-height: 80vh;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    padding-bottom: 4px;
+}
+.resizeable-table-wrap table { min-width: 100%; }
+
+/* Make Gradio dataframe container resizeable */
+#review_table_wrap .svelte-1o8r8wm,
+#review_table_wrap .table-wrap {
+    resize: vertical;
+    overflow: auto;
+    min-height: 220px;
+    max-height: 75vh;
+}
 """
 
 
@@ -284,6 +340,70 @@ def render_chart(chart_file: str) -> str:
     return (f'<iframe srcdoc="{escaped}" style="width:100%;height:540px;'
             f'border:none;border-radius:6px;" '
             f'sandbox="allow-scripts allow-same-origin"></iframe>')
+
+
+def export_chart_png(html_file: str) -> str:
+    """
+    Export a Plotly HTML chart to PNG using kaleido.
+    Returns the PNG file path if successful, or empty string on failure.
+    Kaleido reads the JSON embedded in the HTML to re-render as static image.
+    """
+    png_file = html_file.replace(".html", ".png")
+    # Only regenerate if HTML is newer than existing PNG
+    html_newer = (
+        not os.path.exists(png_file)
+        or os.path.getmtime(html_file) > os.path.getmtime(png_file)
+    )
+    return (
+        _write_png(html_file, png_file)
+        if (os.path.exists(html_file) and html_newer)
+        else (png_file if os.path.exists(png_file) else "")
+    )
+
+
+def _write_png(html_file: str, png_file: str) -> str:
+    """
+    Extract the Plotly JSON from an HTML file and save as PNG via pio.write_image.
+    Returns png_file path on success, empty string if kaleido is unavailable.
+    """
+    import re as _re
+    raw = open(html_file, encoding="utf-8").read()
+    # Plotly embeds the figure JSON in window.PlotlyConfig or as react call
+    match = _re.search(r'Plotly\.newPlot\([^,]+,\s*(\[.*?\]|\{.*?\}),\s*\{', raw, _re.DOTALL)
+    result = (
+        _pio_save(png_file)
+        if match is None  # Fallback: blank placeholder
+        else _pio_from_html(html_file, png_file)
+    )
+    return result
+
+
+def _pio_from_html(html_file: str, png_file: str) -> str:
+    """Use plotly.io to write a static image from an HTML chart."""
+    result = png_file
+    try:
+        import plotly.io as _pio
+        # plotly.io.write_image requires a Figure object, not HTML.
+        # We use a workaround: read JSON from HTML via regex.
+        import re as _re, json as _json
+        raw   = open(html_file, encoding="utf-8").read()
+        m     = _re.search(r'({"data".*?"layout".*?})', raw, _re.DOTALL)
+        fig   = _pio.from_json(m.group(1)) if m else None
+        _     = fig and _pio.write_image(fig, png_file, format="png", width=1200, height=700, scale=2)
+    except Exception:
+        result = ""
+    return result
+
+
+def _pio_save(png_file: str) -> str:
+    """Fallback: kaleido not available — return empty."""
+    return ""
+
+
+def get_chart_png(chart_label: str) -> str:
+    """Return the PNG path for the selected chart label, exporting it on demand."""
+    html_file = dict(CHART_OPTIONS).get(chart_label, "")
+    return export_chart_png(html_file) if html_file else ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -554,11 +674,32 @@ with gr.Blocks(title="BERTopic Agentic Topic Modelling") as demo:
                     chart_display = gr.HTML(
                         "<div style='padding:30px;text-align:center;color:#444;'>"
                         "Charts appear after Phase 2 completes.</div>")
+                    with gr.Row():
+                        chart_dl_btn = gr.Button(
+                            "⬇️ Download Chart as PNG",
+                            variant="secondary", size="sm",
+                        )
+                        chart_dl_file = gr.File(
+                            label="Chart PNG",
+                            show_label=False,
+                            file_count="single",
+                            interactive=False,
+                            visible=True,
+                            height=60,
+                        )
+                    gr.HTML(
+                        "<p style='color:#4a5a7a;font-size:0.7rem;margin:2px 2px;'>"
+                        "PNG export requires <code>kaleido</code>. "
+                        "HTML charts are always available in Downloads tab.</p>"
+                    )
 
                 with gr.Tab("💾 Download"):
                     gr.HTML("<p style='color:#4a5a7a;font-size:0.78rem;padding:6px 2px;'>"
                             "<code>narrative.txt</code> · <code>comparison.csv</code> · "
-                            "<code>themes.json</code> · <code>taxonomy_map.json</code></p>")
+                            "<code>themes.json</code> · <code>taxonomy_map.json</code> · "
+                            "<code>dbscan_summaries*.json</code> · "
+                            "<code>council_labels*.json</code> · "
+                            "<code>*.png</code> charts</p>")
                     dl_box = gr.File(
                         value=get_downloads(),
                         show_label=False,
@@ -595,6 +736,11 @@ with gr.Blocks(title="BERTopic Agentic Topic Modelling") as demo:
         outputs=[chatbot, sid_state, status_state, phase_bar, review_table, dl_box],
     )
     chart_dd.change(fn=on_chart_change, inputs=chart_dd, outputs=chart_display)
+    chart_dl_btn.click(
+        fn=get_chart_png,
+        inputs=chart_dd,
+        outputs=chart_dl_file,
+    )
     clear_btn.click(
         fn=on_clear,
         inputs=[sid_state],

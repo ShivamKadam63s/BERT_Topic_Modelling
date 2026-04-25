@@ -13,6 +13,10 @@ from tools import (
     compare_with_taxonomy,
     generate_comparison_csv,
     export_narrative,
+    # ── New additive tools (DBSCAN + AI Council) ──
+    run_dbscan_clustering,
+    refine_large_clusters,
+    run_ai_council,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -29,7 +33,9 @@ provides the researcher with a chat interface, a review table, charts, and file
 downloads.
 
 You have memory across the entire conversation via LangGraph MemorySaver.
-You are powered by Mistral LLM and have access to 7 specialised tools.
+You are powered by Mistral LLM and have access to 10 specialised tools.
+Tools 1–7 implement the core Braun & Clarke pipeline (unchanged).
+Tools 8–10 provide optional DBSCAN clustering and AI Council labelling.
 
 Your purpose: guide the researcher through all 6 Braun & Clarke phases to
 produce publishable thematic analysis results, including a PAJAIS taxonomy
@@ -164,13 +170,57 @@ TOOL 6: generate_comparison_csv()
 ────────────────────────────────────────────────────────────────────────────────
 TOOL 7: export_narrative(run_key: str)
 ────────────────────────────────────────────────────────────────────────────────
-  Purpose : Generate a 500-word Section 7 narrative covering methodology,
-            themes, PAJAIS alignment, limitations, implications.
+  Purpose : Generate a 500-word Section 7 narrative using Mistral LLM.
+            Covers methodology, themes, PAJAIS alignment, limitations, implications.
             Saves narrative.txt.
   When    : Phase 6 ONLY. After generate_comparison_csv.
   Returns : output file path, word count, 500-char preview.
   Action  : Display preview in chat. Add narrative.txt to Download tab.
             Mark all phases complete. Display final success message.
+
+────────────────────────────────────────────────────────────────────────────────
+TOOL 8: run_dbscan_clustering(run_key: str, eps: float = 0.3, min_samples: int = 3)
+────────────────────────────────────────────────────────────────────────────────
+  Purpose : Run DBSCAN on the SAME embeddings from run_bertopic_discovery.
+            Works in 384-dim cosine space (no UMAP). Parallel to agglomerative
+            clustering — outputs stored SEPARATELY (dbscan_summaries_{run_key}.json).
+            Generates 2 charts: DBSCAN scatter and cluster-count comparison.
+  When    : OPTIONAL. After Phase 2 completes (emb_{run_key}.npy must exist).
+            Researcher triggers with: "run dbscan" or "compare clustering methods".
+  Returns : n_clusters, noise_points, largest_cluster, chart files.
+  Action  : Report DBSCAN stats vs agglomerative in chat. Tell researcher the
+            new DBSCAN charts are available in the Charts tab.
+            Do NOT interrupt the main Braun & Clarke pipeline.
+
+────────────────────────────────────────────────────────────────────────────────
+TOOL 9: refine_large_clusters(run_key: str, size_threshold: int = 200)
+────────────────────────────────────────────────────────────────────────────────
+  Purpose : Splits DBSCAN clusters larger than size_threshold into sub-clusters
+            using tighter AgglomerativeClustering (threshold=0.45).
+            Does NOT modify any existing agglomerative or DBSCAN outputs.
+            Saves refined_clusters_{run_key}.json.
+  When    : OPTIONAL. After run_dbscan_clustering has completed.
+            Researcher triggers with: "refine large clusters" or similar.
+  Returns : n_large_refined, total_subclusters, chart file.
+  Action  : Report which clusters were refined and how many sub-clusters created.
+
+────────────────────────────────────────────────────────────────────────────────
+TOOL 10: run_ai_council(run_key: str)
+────────────────────────────────────────────────────────────────────────────────
+  Purpose : Two Mistral instances (temperature=0.2 analytical vs temperature=0.8
+            creative) independently label each DBSCAN cluster from its top-3
+            representative sentences. A Jaccard-based consensus step resolves
+            agreements (≥0.4 overlap → agreed) vs divergences.
+            Saves council_labels_{run_key}.json (PAJAIS-compatible: has 'label' field).
+  When    : OPTIONAL. After run_dbscan_clustering has completed.
+            Researcher triggers with: "run ai council" or "council labels".
+  Returns : total_labelled, agreement_rate, output_file.
+  Action  : Report agreement rate and a table of label_a vs label_b in chat.
+            Mention that council_labels_{run_key}.json is in the Download tab.
+
+  IMPORTANT: Tools 8–10 are SUPPLEMENTARY. They must NEVER block or delay the
+  main Braun & Clarke pipeline (Tools 1–7). If a researcher asks about DBSCAN
+  during Phase 3–6, offer to run it AFTER the current phase gate is cleared.
 
 ================================================================================
 RUN CONFIGURATIONS
@@ -440,6 +490,10 @@ _tools = [
     compare_with_taxonomy,
     generate_comparison_csv,
     export_narrative,
+    # ── Additive tools (DBSCAN + AI Council) — registered alongside originals ──
+    run_dbscan_clustering,
+    refine_large_clusters,
+    run_ai_council,
 ]
 
 _checkpointer = MemorySaver()
@@ -451,4 +505,4 @@ agent = create_react_agent(
     prompt=SYSTEM_PROMPT,
 )
 
-# Verified: exactly 4 STOP gates implemented
+# Verified: exactly 4 STOP gates implemented (Tools 8-10 are additive, do not add gates)
