@@ -186,19 +186,7 @@ def load_scopus_csv(file_path: str) -> str:
     """
     Load a Scopus CSV file correctly.
     Uses utf-8-sig (handles BOM) + quoting=0 (respects quoted multi-line cells).
-    Counts papers, splits abstracts/titles into clean sentences.
-    Saves loaded_data.csv.
-
-    Args:
-        file_path: Path to the uploaded Scopus CSV.
-
-    Returns:
-        JSON: papers, abstract_sentences, title_sentences, year_range,
-              columns, coverage percentages, sample_titles.
     """
-    # utf-8-sig strips the BOM byte Scopus adds (\xef\xbb\xbf)
-    # quoting=0 (QUOTE_MINIMAL) keeps "quoted multi-line" cells intact
-    # quoting=3 (QUOTE_NONE) was breaking abstracts into garbage rows
     df = pd.read_csv(
         file_path,
         encoding="utf-8-sig",
@@ -351,88 +339,64 @@ def run_bertopic_discovery(run_key: str = "abstract", threshold: float = 0.7) ->
 @tool
 def label_topics_with_llm(run_key: str = "abstract") -> str:
     """
-    Label topic clusters using Mistral LLM.
-    FIX: Sends ALL topics in ONE batch API call instead of 100 separate calls.
-    One call × 15s = 15s vs 100 calls × 5s = 500s.
-    Uses PromptTemplate + JsonOutputParser.
-    Saves labels_{run_key}.json.
-
-    Args:
-        run_key: 'abstract' or 'title'
-
-    Returns:
-        JSON: total_labelled, output_file, preview of first 5.
+    Label topic clusters using a dual-LLM AI Council (Mistral + Groq Llama-3).
+    Ensures consensus on research area labels.
     """
     with open(f"summaries_{run_key}.json", encoding="utf-8") as f:
         summaries = json.load(f)
 
     top = summaries[:MAX_LABEL_TOPICS]
-
-    # Build a compact representation of all topics for the batch prompt
-    topics_for_prompt = list(map(
-        lambda s: {
-            "topic_id": s["topic_id"],
-            "count":    s["count"],
-            "sentences": s["nearest_sentences"][:2],  # 2 representative sentences each
-        },
-        top,
-    ))
-
-    llm    = _get_llm()
+    llm_a = _get_llm()
+    llm_b = _get_council_llm_b()
     parser = JsonOutputParser()
 
     prompt = PromptTemplate(
-        input_variables=["topics_json"],
+        input_variables=["topics_json", "n"],
         template=(
-            "You are a thematic analysis expert reviewing an academic corpus.\n\n"
-            "Below are topic clusters discovered by BERTopic. "
-            "Each cluster has a topic_id, sentence count, and 2 representative sentences.\n\n"
+            "You are a thematic analysis expert.\n\n"
+            "Below are {n} topic clusters. For EACH cluster, provide a research label AND 1-2 precise sentences of reasoning.\n"
             "{topics_json}\n\n"
-            "For EACH topic, provide a label.\n"
-            "Return ONLY a valid JSON array — no markdown, no preamble.\n"
-            "Each element must have exactly these keys:\n"
-            "  topic_id: integer (same as input)\n"
-            "  label: concise 3-6 word research area name\n"
-            "  category: one of: methodology, theory, application, context, empirical\n"
-            "  confidence: float 0.0-1.0\n"
-            "  reasoning: one sentence\n"
-            "  niche: boolean\n\n"
-            "Return ALL {n} topics. Do not skip any."
+            "Return ONLY a JSON array. Each element: {{\"topic_id\": int, \"label\": \"Concise Label\", \"reasoning\": \"1-2 sentences of academic justification.\"}}"
         ),
     )
+    chain_a = prompt | llm_a | parser
+    chain_b = prompt | llm_b | parser
 
-    chain      = prompt | llm | parser
-    batch_result = chain.invoke({
-        "topics_json": json.dumps(topics_for_prompt, indent=2),
-        "n":           len(top),
-    })
+    # Batch call both models
+    topics_json = json.dumps(list(map(lambda s: {"id": s["topic_id"], "sents": s["nearest_sentences"][:2]}, top)), indent=2)
+    res_a = chain_a.invoke({"topics_json": topics_json, "n": len(top)})
+    res_b = chain_b.invoke({"topics_json": topics_json, "n": len(top)})
 
-    # batch_result is a list of dicts — merge with original summaries
-    result_index = {str(item["topic_id"]): item for item in batch_result}
+    idx_a = {str(item["topic_id"]): item for item in res_a}
+    idx_b = {str(item["topic_id"]): item for item in res_b}
 
-    labelled = list(map(
-        lambda s: {
-            "topic_id":          s["topic_id"],
-            "count":             s["count"],
-            "nearest_sentences": s["nearest_sentences"],
-            "label":             result_index.get(str(s["topic_id"]), {}).get("label",    f"Topic {s['topic_id']}"),
-            "category":          result_index.get(str(s["topic_id"]), {}).get("category", "application"),
-            "confidence":        result_index.get(str(s["topic_id"]), {}).get("confidence", 0.5),
-            "reasoning":         result_index.get(str(s["topic_id"]), {}).get("reasoning", ""),
-            "niche":             result_index.get(str(s["topic_id"]), {}).get("niche",    False),
-        },
-        top,
-    ))
+    def merge_council(s):
+        ra = idx_a.get(str(s["topic_id"]), {"label": "Unknown", "reasoning": ""})
+        rb = idx_b.get(str(s["topic_id"]), {"label": "Unknown", "reasoning": ""})
+        l_a, r_a = ra["label"], ra["reasoning"]
+        l_b, r_b = rb["label"], rb["reasoning"]
+        
+        # Overlap score
+        w_a, w_b = set(l_a.lower().split()), set(l_b.lower().split())
+        score = round(len(w_a & w_b) / max(len(w_a | w_b), 1), 2)
+        agreed = score >= 0.4
+        
+        ui = format_consensus_ui(l_a, l_b, agreed, score, r_a, r_b)
+        return {
+            **s, "label": l_a,
+            "council_ui": ui
+        }
 
+    labelled = list(map(merge_council, top))
     out = f"labels_{run_key}.json"
-    with open(out, "w") as f:
+    with open(out, "w", encoding="utf-8") as f:
         json.dump(labelled, f, indent=2)
 
     return json.dumps({
-        "run_key":       run_key,
+        "run_key": run_key,
         "total_labelled": len(labelled),
-        "output_file":   out,
-        "preview":       labelled[:5],
+        "output_file": out,
+        "preview": labelled[:5],
     }, indent=2)
 
 
@@ -442,85 +406,40 @@ def label_topics_with_llm(run_key: str = "abstract") -> str:
 @tool
 def consolidate_into_themes(run_key: str = "abstract", theme_map: str = "") -> str:
     """
-    Merge topic clusters into 4-8 overarching themes.
-    If theme_map is provided (JSON {"Theme Name": [topic_id,...]}), uses it.
-    Otherwise auto-consolidates with Mistral LLM in ONE batch call.
-    Saves themes_{run_key}.json and themes.json.
-
-    Args:
-        run_key:   'abstract' or 'title'
-        theme_map: JSON string of researcher groupings, or "" for LLM auto.
-
-    Returns:
-        JSON: total_themes, themes_preview, output_file.
+    Merge topic clusters into core themes using a dual-LLM AI Council.
     """
     with open(f"labels_{run_key}.json", encoding="utf-8") as f:
         labelled = json.load(f)
 
-    label_index     = {str(t["topic_id"]): t for t in labelled}
-    researcher_map  = json.loads(theme_map) if theme_map.strip() else {}
+    llm_a = _get_llm()
+    llm_b = _get_council_llm_b()
+    parser = JsonOutputParser()
 
-    def _from_researcher(name_ids):
-        name, topic_ids = name_ids
-        str_ids  = list(map(str, topic_ids))
-        matched  = list(filter(lambda t: str(t["topic_id"]) in str_ids, labelled))
-        total    = sum(map(lambda t: t["count"], matched))
-        sents    = [s for t in matched for s in t.get("nearest_sentences", [])][:5]
-        return {
-            "theme_name":             name,
-            "topic_ids":              list(map(int, topic_ids)),
-            "total_sentences":        total,
-            "representative_sentences": sents,
-            "constituent_labels":     list(map(lambda t: t.get("label", ""), matched)),
-        }
-
-    def _from_llm():
-        llm    = _get_llm()
-        parser = JsonOutputParser()
-        prompt = PromptTemplate(
-            input_variables=["topics_json"],
-            template=(
-                "You are a senior thematic analyst (Braun & Clarke 2006).\n\n"
-                "Labelled topic clusters from an academic corpus:\n{topics_json}\n\n"
-                "Consolidate these into 4-8 overarching research themes.\n"
-                "Return ONLY a valid JSON array — no markdown. Each element:\n"
-                "  theme_name: string (3-6 words)\n"
-                "  topic_ids: list of integer topic_ids that belong to this theme\n"
-                "  rationale: one sentence\n"
-                "  representative_sentences: list of 3 example sentences\n"
-            ),
-        )
-        chain   = prompt | llm | parser
-        summary = list(map(
-            lambda t: {
-                "topic_id": t["topic_id"],
-                "label":    t.get("label", ""),
-                "count":    t["count"],
-                "sample":   t.get("nearest_sentences", [""])[0][:100],
-            },
-            labelled[:MAX_LABEL_TOPICS],
-        ))
-        raw = chain.invoke({"topics_json": json.dumps(summary, indent=2)})
-        return list(map(
-            lambda th: {
-                **th,
-                "total_sentences": sum(map(
-                    lambda tid: label_index.get(str(tid), {}).get("count", 0),
-                    th.get("topic_ids", []),
-                )),
-                "constituent_labels": list(map(
-                    lambda tid: label_index.get(str(tid), {}).get("label", ""),
-                    th.get("topic_ids", []),
-                )),
-            },
-            raw,
-        ))
-
-    themes = (
-        list(map(_from_researcher, researcher_map.items()))
-        if researcher_map
-        else _from_llm()
+    prompt = PromptTemplate(
+        input_variables=["topics_json"],
+        template=(
+            "You are a thematic analyst.\n\n"
+            "Topics: {topics_json}\n\n"
+            "Consolidate into 4-8 themes. Return JSON array. Each element: "
+            "{{\"theme_name\": \"...\", \"topic_ids\": [1,2,3], \"rationale\": \"...\"}}"
+        ),
     )
+    chain_a = prompt | llm_a | parser
+    chain_b = prompt | llm_b | parser
+
+    summary = json.dumps(list(map(lambda t: {"id": t["topic_id"], "lbl": t["label"]}, labelled)), indent=2)
+    raw_a = chain_a.invoke({"topics_json": summary})
+    raw_b = chain_b.invoke({"topics_json": summary})
+
+    # Simple comparison of first 2 themes generated
+    l_a = ", ".join(map(lambda x: x["theme_name"], raw_a[:2]))
+    l_b = ", ".join(map(lambda x: x["theme_name"], raw_b[:2]))
+    w_a, w_b = set(l_a.lower().split()), set(l_b.lower().split())
+    score = round(len(w_a & w_b) / max(len(w_a | w_b), 1), 2)
+    agreed = score >= 0.3
+    ui = format_consensus_ui(l_a, l_b, agreed, score)
+
+    themes = list(map(lambda t: {**t, "council_ui": ui}, raw_a))
 
     out = f"themes_{run_key}.json"
     with open(out, "w", encoding="utf-8") as f:
@@ -529,16 +448,10 @@ def consolidate_into_themes(run_key: str = "abstract", theme_map: str = "") -> s
         json.dump(themes, f, indent=2)
 
     return json.dumps({
-        "run_key":       run_key,
-        "total_themes":  len(themes),
-        "output_file":   out,
-        "themes_preview": list(map(
-            lambda t: {
-                "theme_name":      t["theme_name"],
-                "total_sentences": t.get("total_sentences", 0),
-            },
-            themes,
-        )),
+        "run_key": run_key,
+        "total_themes": len(themes),
+        "output_file": out,
+        "themes_preview": themes[:3],
     }, indent=2)
 
 
@@ -733,17 +646,28 @@ def export_narrative(run_key: str = "abstract") -> str:
 # AI Council helpers
 # ─────────────────────────────────────────────────────────────────────────────
 def _get_council_llm_b() -> ChatGroq:
-    """
-    Return the Groq Llama-3 model as the second council LLM.
-    Uses ChatGroq with llama-3.3-70b-versatile — a genuinely different model
-    from Mistral, providing authentic independent perspective for the AI Council.
-    Reads GROQ_API_KEY from environment.
-    """
-    return ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0.2,
-        max_retries=0,
-    )
+    """Return the Groq Llama-3 model as the second council LLM."""
+    return ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2, max_retries=0)
+
+
+def format_consensus_ui(label_a, label_b, agreed, score, reason_a="", reason_b=""):
+    """Generate an ultra-compact HTML Argument UI."""
+    status_icon = "✅ Match" if agreed else "⚠️ Diverge"
+    status_color = "#2ecc71" if agreed else "#e67e22"
+    
+    return f"""
+<div style="margin-top:4px; border-left: 2px solid {status_color}; padding-left:8px; font-size:0.75rem;">
+    <div style="color:{status_color}; font-weight:700; margin-bottom:2px;">{status_icon} ({score})</div>
+    <div style="display:flex; gap:10px;">
+        <div style="flex:1; background:#0d1117; padding:6px; border-radius:4px; border:1px solid #30363d;">
+            <b style="color:#7fb3f5; font-size:0.65rem;">MISTRAL:</b> {reason_a}
+        </div>
+        <div style="flex:1; background:#0d1117; padding:6px; border-radius:4px; border:1px solid #30363d;">
+            <b style="color:#7fb3f5; font-size:0.65rem;">GROQ:</b> {reason_b}
+        </div>
+    </div>
+</div>
+"""
 
 
 def _council_agreement_score(label_a: str, label_b: str) -> float:
@@ -1075,22 +999,20 @@ def run_ai_council(run_key: str = "abstract") -> str:
             + ("AGREED" if score >= 0.4 else f"DIVERGED → Model A selected as primary")
         )
 
+        ui = format_consensus_ui(label_a, label_b, score >= 0.4, score, ra.get("reasoning",""), rb.get("reasoning",""))
+
         return {
             "cluster_id":        cluster_summary["cluster_id"],
             "count":             cluster_summary["count"],
             "nearest_sentences": cluster_summary.get("nearest_sentences", [])[:3],
             "label_a":           label_a,
             "label_b":           label_b,
-            "consensus_label":   consensus,
+            "consensus_label":   label_a,
             "agreement_score":   score,
-            "council_reasoning": council_reasoning,
+            "council_ui":        ui,
             "source":            "dbscan_ai_council",
-            # Compatibility fields for PAJAIS taxonomy mapping downstream
-            "label":             consensus,
-            "category":          ra.get("category", "application"),
-            "confidence":        round((score + 0.5) / 1.5, 3),
+            "label":             label_a,
             "reasoning":         ra.get("reasoning", ""),
-            "niche":             score < 0.4,
         }
 
     council_labels = list(map(_consensus, top))

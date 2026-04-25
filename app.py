@@ -11,6 +11,7 @@
 #           crash print() on Windows cp1252 consoles.
 
 import sys
+import shutil
 
 # FIX-E: Reconfigure console to UTF-8 BEFORE any print() calls.
 # Windows default (cp1252) cannot encode Mistral's emoji responses,
@@ -326,6 +327,36 @@ def load_review_table() -> pd.DataFrame:
     return EMPTY_REVIEW_DF
 
 
+def load_council_report() -> str:
+    """Return a detailed HTML report of the AI Council arguments."""
+    possible_files = ["labels_abstract.json", "labels_title.json", "council_labels_abstract.json"]
+    found = [f for f in possible_files if os.path.exists(f)]
+    if not found:
+        return "<div style='padding:40px;text-align:center;color:#4a5a7a;'>AI Council arguments will appear here after Phase 3 or after running DBSCAN Council.</div>"
+    
+    with open(found[0], encoding="utf-8") as f:
+        data = json.load(f)
+    
+    # We want to show the top 10 most interesting arguments (or all if few)
+    items = data[:20]
+    html = "<div style='display:flex; flex-direction:column; gap:12px;'>"
+    for item in items:
+        # Check if the tool output the UI block or we need to build it
+        ui = item.get("council_ui", item.get("council_reasoning", ""))
+        label = item.get("label", item.get("consensus_label", "Unknown"))
+        html += f"""
+        <div style="background:#1a1a2e; border:1px solid #2a2a4a; border-radius:8px; padding:12px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span style="color:#7fb3f5; font-weight:bold;">Topic #{item.get('topic_id', item.get('cluster_id', '?'))}</span>
+                <span style="color:#fff; font-size:0.9rem;">Final Choice: <b>{label}</b></span>
+            </div>
+            {ui}
+        </div>
+        """
+    html += "</div>"
+    return html
+
+
 def get_downloads():
     found = [f for f in DOWNLOAD_FILES if os.path.exists(f)]
     return found if found else None
@@ -428,6 +459,20 @@ def call_agent(message: str, session_id: str, max_retries: int = 3) -> tuple[str
     for attempt in range(max_retries):
         try:
             config = {"configurable": {"thread_id": current_sid}}
+            # --- TRASH FILTER ---
+            # Strips any hallucinated prefixes like "månd", "migrations", or "onderlinge"
+            # It looks for the first '{' and assumes the tool arguments start there if found.
+            if "{" in message:
+                try:
+                    # Only strip if there's actual text before the first brace
+                    prefix = message.split("{")[0]
+                    if prefix.strip() and not prefix.endswith("******"):
+                         message = "{" + message.split("{", 1)[1]
+                except Exception: pass
+            
+            if "******" in message and not message.startswith("******"):
+                message = "******" + message.split("******", 1)[1]
+            
             result = agent.invoke(
                 {"messages": [{"role": "user", "content": message}]},
                 config=config,
@@ -495,8 +540,11 @@ def on_upload(file_obj, history, sid, status):
         return history, sid, status, build_phase_bar(status), load_review_table(), get_downloads()
     try:
         path = file_obj.name if hasattr(file_obj, "name") else str(file_obj)
+        # Normalize for Windows to prevent escape sequence errors (\U, \t)
+        clean_path = path.replace("\\", "/")
+        
         msg = (
-            f"I have uploaded my Scopus CSV. File path: {path}\n\n"
+            f"I have uploaded my Scopus CSV. File path: {clean_path}\n\n"
             "Please begin Phase 1: load the file, show all dataset statistics "
             "(papers, abstract sentences, title sentences, year range, columns, "
             "sample titles), then ask me which run_key to use."
@@ -504,25 +552,25 @@ def on_upload(file_obj, history, sid, status):
         response, new_sid = call_agent(msg, sid)
         new_hist   = append_msgs(history, msg, response)
         new_status = parse_phase_status(response, status)
-        return new_hist, new_sid, new_status, build_phase_bar(new_status), load_review_table(), get_downloads()
+        return new_hist, new_sid, new_status, build_phase_bar(new_status), load_review_table(), load_council_report(), get_downloads()
     except Exception as e:
         log_error(str(e), ctx="on_upload")
         return (append_msgs(history, "[File Upload]", f"Upload error: {e}"),
-                sid, status, build_phase_bar(status), load_review_table(), get_downloads())
+                sid, status, build_phase_bar(status), load_review_table(), load_council_report(), get_downloads())
 
 
 def on_send(user_msg, history, sid, status):
     if not user_msg.strip():
-        return history, "", sid, status, build_phase_bar(status), load_review_table(), get_downloads()
+        return history, "", sid, status, build_phase_bar(status), load_review_table(), load_council_report(), get_downloads()
     try:
         response, new_sid = call_agent(user_msg, sid)
         new_hist   = append_msgs(history, user_msg, response)
         new_status = parse_phase_status(response, status)
-        return new_hist, "", new_sid, new_status, build_phase_bar(new_status), load_review_table(), get_downloads()
+        return new_hist, "", new_sid, new_status, build_phase_bar(new_status), load_review_table(), load_council_report(), get_downloads()
     except Exception as e:
         log_error(str(e), ctx="on_send")
         return (append_msgs(history, user_msg, f"Error: {e}"),
-                "", sid, status, build_phase_bar(status), load_review_table(), get_downloads())
+                "", sid, status, build_phase_bar(status), load_review_table(), load_council_report(), get_downloads())
 
 
 def on_submit_review(review_df, history, sid, status):
@@ -558,7 +606,7 @@ def on_submit_review(review_df, history, sid, status):
         response, new_sid = call_agent(msg, sid)
         new_hist   = append_msgs(history, msg, response)
         new_status = parse_phase_status(response, status)
-        return new_hist, new_sid, new_status, build_phase_bar(new_status), load_review_table(), get_downloads()
+        return new_hist, new_sid, new_status, build_phase_bar(new_status), load_review_table(), load_council_report(), get_downloads()
     except Exception as e:
         log_error(str(e), ctx="on_submit_review")
         return (append_msgs(history, "[Submit Review]", f"Submit error: {e}"),
@@ -674,24 +722,15 @@ with gr.Blocks(title="BERTopic Agentic Topic Modelling") as demo:
                     chart_display = gr.HTML(
                         "<div style='padding:30px;text-align:center;color:#444;'>"
                         "Charts appear after Phase 2 completes.</div>")
-                    with gr.Row():
-                        chart_dl_btn = gr.Button(
-                            "⬇️ Download Chart as PNG",
-                            variant="secondary", size="sm",
-                        )
-                        chart_dl_file = gr.File(
-                            label="Chart PNG",
-                            show_label=False,
-                            file_count="single",
-                            interactive=False,
-                            visible=True,
-                            height=60,
-                        )
                     gr.HTML(
                         "<p style='color:#4a5a7a;font-size:0.7rem;margin:2px 2px;'>"
-                        "PNG export requires <code>kaleido</code>. "
-                        "HTML charts are always available in Downloads tab.</p>"
+                        "Interactive Plotly charts. HTML files are available in Downloads tab.</p>"
                     )
+                
+                with gr.Tab("⚖️ AI Council"):
+                    gr.HTML("<p style='color:#4a5a7a;font-size:0.73rem;margin:4px 2px;'>"
+                            "Real-time arguments between Model A (Mistral) and Model B (Groq).</p>")
+                    council_display = gr.HTML(value=load_council_report())
 
                 with gr.Tab("💾 Download"):
                     gr.HTML("<p style='color:#4a5a7a;font-size:0.78rem;padding:6px 2px;'>"
@@ -715,7 +754,7 @@ with gr.Blocks(title="BERTopic Agentic Topic Modelling") as demo:
     file_input.change(
         fn=on_upload,
         inputs=[file_input, history_state, sid_state, status_state],
-        outputs=[chatbot, sid_state, status_state, phase_bar, review_table, dl_box],
+        outputs=[chatbot, sid_state, status_state, phase_bar, review_table, council_display, dl_box],
     )
     # Keep history_state in sync with chatbot (chatbot is the source of truth)
     chatbot.change(fn=lambda h: h, inputs=chatbot, outputs=history_state)
@@ -723,24 +762,19 @@ with gr.Blocks(title="BERTopic Agentic Topic Modelling") as demo:
     send_btn.click(
         fn=on_send,
         inputs=[chat_input, history_state, sid_state, status_state],
-        outputs=[chatbot, chat_input, sid_state, status_state, phase_bar, review_table, dl_box],
+        outputs=[chatbot, chat_input, sid_state, status_state, phase_bar, review_table, council_display, dl_box],
     )
     chat_input.submit(
         fn=on_send,
         inputs=[chat_input, history_state, sid_state, status_state],
-        outputs=[chatbot, chat_input, sid_state, status_state, phase_bar, review_table, dl_box],
+        outputs=[chatbot, chat_input, sid_state, status_state, phase_bar, review_table, council_display, dl_box],
     )
     submit_btn.click(
         fn=on_submit_review,
         inputs=[review_table, history_state, sid_state, status_state],
-        outputs=[chatbot, sid_state, status_state, phase_bar, review_table, dl_box],
+        outputs=[chatbot, sid_state, status_state, phase_bar, review_table, council_display, dl_box],
     )
     chart_dd.change(fn=on_chart_change, inputs=chart_dd, outputs=chart_display)
-    chart_dl_btn.click(
-        fn=get_chart_png,
-        inputs=chart_dd,
-        outputs=chart_dl_file,
-    )
     clear_btn.click(
         fn=on_clear,
         inputs=[sid_state],
