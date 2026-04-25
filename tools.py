@@ -23,6 +23,7 @@ from langchain_core.tools import tool
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_mistralai import ChatMistralAI
+from langchain_groq import ChatGroq
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AgglomerativeClustering, DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
@@ -731,22 +732,17 @@ def export_narrative(run_key: str = "abstract") -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # AI Council helpers
 # ─────────────────────────────────────────────────────────────────────────────
-def _get_council_llm_b() -> ChatMistralAI:
+def _get_council_llm_b() -> ChatGroq:
     """
-    Return the second council LLM.
-    Uses Groq Llama-3 if GROQ_API_KEY is set, otherwise Mistral at temperature=0.8.
-    This simulates diverse reasoning perspectives for the AI Council.
+    Return the Groq Llama-3 model as the second council LLM.
+    Uses ChatGroq with llama-3.3-70b-versatile — a genuinely different model
+    from Mistral, providing authentic independent perspective for the AI Council.
+    Reads GROQ_API_KEY from environment.
     """
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    return (
-        __import__("groq_langchain_shim", fromlist=["_groq_llm"])._groq_llm()
-        if False  # Groq shim placeholder — see fallback below
-        else ChatMistralAI(
-            model="mistral-large-latest",
-            temperature=0.8,       # Higher temperature = more creative label proposals
-            timeout=MISTRAL_TIMEOUT,
-            max_retries=0,
-        )
+    return ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0.2,
+        max_retries=0,
     )
 
 
@@ -987,13 +983,13 @@ def run_ai_council(run_key: str = "abstract") -> str:
     AI Council: two LLM instances independently label each DBSCAN cluster
     from its top-3 representative sentences, then a consensus step merges them.
 
-    Model A: Mistral (temperature=0.2) — analytical, precise
-    Model B: Mistral (temperature=0.8) — creative, divergent (simulates a
-             Karpathy-style second opinion; swap for Groq Llama-3 via GROQ_API_KEY)
+    Model A: Mistral Large (temperature=0.2) — analytical, precise
+    Model B: Groq Llama-3.3-70b-versatile (temperature=0.2) — genuinely different
+             model providing independent perspective (Karpathy-style second opinion)
 
     Consensus rule:
       - Jaccard word overlap >= 0.4  → agreement; consensus = Model A label
-      - Jaccard word overlap < 0.4   → divergence; Mistral (as judge) picks best
+      - Jaccard word overlap < 0.4   → divergence; Model A (Mistral) selected as primary
 
     Saves council_labels_{run_key}.json (compatible with PAJAIS mapping).
 
@@ -1114,8 +1110,8 @@ def run_ai_council(run_key: str = "abstract") -> str:
         "output_file":    out_file,
         "note": (
             "council_labels contain 'label' field for PAJAIS compatibility. "
-            "Model A = Mistral temp=0.2 (analytical). "
-            "Model B = Mistral temp=0.8 (creative/divergent)."
+            "Model A = Mistral Large (analytical). "
+            "Model B = Groq Llama-3.3-70b-versatile (independent second opinion)."
         ),
         "preview": council_labels[:4],
     }, indent=2)

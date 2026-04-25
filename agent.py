@@ -207,10 +207,12 @@ TOOL 9: refine_large_clusters(run_key: str, size_threshold: int = 200)
 ────────────────────────────────────────────────────────────────────────────────
 TOOL 10: run_ai_council(run_key: str)
 ────────────────────────────────────────────────────────────────────────────────
-  Purpose : Two Mistral instances (temperature=0.2 analytical vs temperature=0.8
-            creative) independently label each DBSCAN cluster from its top-3
-            representative sentences. A Jaccard-based consensus step resolves
-            agreements (≥0.4 overlap → agreed) vs divergences.
+  Purpose : Two genuinely different LLMs independently label each DBSCAN cluster:
+            - Model A: Mistral Large (temperature=0.2) — analytical, precise
+            - Model B: Groq Llama-3.3-70b-versatile — genuinely independent model,
+              providing a Karpathy-style second opinion from a different architecture.
+            A Jaccard-based consensus step resolves agreements (≥0.4 word overlap
+            → agreed, use Model A label) vs divergences (Model A selected as primary).
             Saves council_labels_{run_key}.json (PAJAIS-compatible: has 'label' field).
   When    : OPTIONAL. After run_dbscan_clustering has completed.
             Researcher triggers with: "run ai council" or "council labels".
