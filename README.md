@@ -2,7 +2,7 @@
 
 ### *Computational Thematic Analysis powered by Braun & Clarke (2006)*
 
-![BERTopic Agent Logo](assets/logo.png)
+![BERTopic Agent Logo](logo.png)
 
 ---
 
